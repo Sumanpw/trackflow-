@@ -1,5 +1,6 @@
 package com.trackflow.entity;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import java.time.LocalDateTime;
@@ -41,11 +42,16 @@ public class User {
     @Column(nullable = false, length = 30)
     private String role = "CUSTOMER";
 
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Column(name = "profile_picture")
+    private String profilePicture;
 
     @PrePersist
     protected void onCreate() {
@@ -58,38 +64,36 @@ public class User {
         updatedAt = LocalDateTime.now();
     }
 
-    // Getters and Setters (keep existing)
+    // Getters and Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
-    
+
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
-    
+
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
-    
+
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
-    
+
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
-    
+
     public String getFullName() { return fullName; }
     public void setFullName(String fullName) { this.fullName = fullName; }
-    
+
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
-    
+
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-    
+
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
-    
-    @Column(name = "profile_picture")
-    private String profilePicture;
 
     public String getProfilePicture() { return profilePicture; }
     public void setProfilePicture(String profilePicture) { this.profilePicture = profilePicture; }
