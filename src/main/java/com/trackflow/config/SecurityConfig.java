@@ -54,14 +54,18 @@ public class SecurityConfig {
                         // Public endpoints
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/error").permitAll()
-                        // ✅ Swagger/OpenAPI endpoints
+                        // Swagger
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/api-docs/**",
                                 "/v3/api-docs/**"
                         ).permitAll()
-                        // Everything else needs authentication
+                        // WebSocket (allows initial handshake)
+                        .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers("/topic/**").permitAll()
+                        .requestMatchers("/app/**").permitAll()
+                        // Everything else needs auth
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session

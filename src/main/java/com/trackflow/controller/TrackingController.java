@@ -1,16 +1,20 @@
 package com.trackflow.controller;
 
-import com.trackflow.entity.DriverSession;
+import com.trackflow.dto.TrackingRequest;
+import com.trackflow.dto.TrackingResponse;
 import com.trackflow.entity.TrackingEvent;
 import com.trackflow.service.TrackingService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/tracking")
@@ -19,73 +23,60 @@ public class TrackingController {
     @Autowired
     private TrackingService trackingService;
 
-    // ========================================
-    // 1. Update location (DELIVERY_PARTNER)
-    // ========================================
     @PostMapping("/location")
     @PreAuthorize("hasAnyRole('ADMIN', 'DELIVERY_PARTNER')")
-    public ResponseEntity<TrackingEvent> updateLocation(@RequestBody Map<String, Object> request) {
-        return new ResponseEntity<>(
-                trackingService.recordLocation(request),
-                HttpStatus.CREATED);
+    public ResponseEntity<TrackingResponse> updateLocation(@Valid @RequestBody TrackingRequest request) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("shipmentId", request.getShipmentId());
+        map.put("trackingId", request.getTrackingId());
+        map.put("status", request.getStatus());
+        map.put("latitude", request.getLatitude());
+        map.put("longitude", request.getLongitude());
+        map.put("locationName", request.getLocationName());
+
+        TrackingEvent event = trackingService.recordLocation(map);
+        return new ResponseEntity<>(TrackingResponse.fromEntity(event), HttpStatus.CREATED);
     }
 
-    // ========================================
-    // 2. Get tracking info (any auth)
-    // ========================================
     @GetMapping("/{trackingId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER', 'DELIVERY_PARTNER')")
     public ResponseEntity<Map<String, Object>> getTrackingInfo(@PathVariable String trackingId) {
         return ResponseEntity.ok(trackingService.getTrackingInfo(trackingId));
     }
 
-    // ========================================
-    // 3. Get all events for shipment
-    // ========================================
     @GetMapping("/{trackingId}/events")
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER', 'DELIVERY_PARTNER')")
-    public List<TrackingEvent> getTrackingEvents(@PathVariable String trackingId) {
-        return trackingService.getTrackingEvents(trackingId);
+    public List<TrackingResponse> getTrackingEvents(@PathVariable String trackingId) {
+        return trackingService.getTrackingEvents(trackingId).stream()
+                .map(TrackingResponse::fromEntity)
+                .collect(Collectors.toList());
     }
 
-    // ========================================
-    // 4. Start driver session
-    // ========================================
+    @GetMapping("/{trackingId}/map")
+    @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER', 'DELIVERY_PARTNER')")
+    public List<TrackingResponse> getMapData(@PathVariable String trackingId) {
+        return trackingService.getMapData(trackingId).stream()
+                .map(TrackingResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
+
     @PostMapping("/session/start")
     @PreAuthorize("hasAnyRole('ADMIN', 'DELIVERY_PARTNER')")
-    public ResponseEntity<DriverSession> startSession(@RequestBody Map<String, Long> request) {
-        Long partnerId = request.get("partnerId");
-        Long shipmentId = request.get("shipmentId");
+    public ResponseEntity<Object> startSession(@RequestBody Map<String, Long> request) {
         return new ResponseEntity<>(
-                trackingService.startSession(partnerId, shipmentId),
+                trackingService.startSession(request.get("partnerId"), request.get("shipmentId")),
                 HttpStatus.CREATED);
     }
 
-    // ========================================
-    // 5. End driver session
-    // ========================================
     @PostMapping("/session/end")
     @PreAuthorize("hasAnyRole('ADMIN', 'DELIVERY_PARTNER')")
-    public ResponseEntity<DriverSession> endSession(@RequestBody Map<String, String> request) {
-        String sessionToken = request.get("sessionToken");
-        return ResponseEntity.ok(trackingService.endSession(sessionToken));
+    public ResponseEntity<Object> endSession(@RequestBody Map<String, String> request) {
+        return ResponseEntity.ok(trackingService.endSession(request.get("sessionToken")));
     }
 
-    // ========================================
-    // 6. Get active sessions
-    // ========================================
     @GetMapping("/session/active/{partnerId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'DELIVERY_PARTNER')")
-    public List<DriverSession> getActiveSessions(@PathVariable Long partnerId) {
-        return trackingService.getActiveSessions(partnerId);
-    }
-
-    // ========================================
-    // 7. Get map data
-    // ========================================
-    @GetMapping("/{trackingId}/map")
-    @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER', 'DELIVERY_PARTNER')")
-    public List<TrackingEvent> getMapData(@PathVariable String trackingId) {
-        return trackingService.getMapData(trackingId);
+    public ResponseEntity<Object> getActiveSessions(@PathVariable Long partnerId) {
+        return ResponseEntity.ok(trackingService.getActiveSessions(partnerId));
     }
 }

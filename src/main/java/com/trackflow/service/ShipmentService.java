@@ -21,7 +21,12 @@ public class ShipmentService {
     @Autowired
     private QRCodeService qrCodeService;
 
+    @Autowired
+    private WebSocketNotificationService wsService;
+
+    // ========================================
     // Create new shipment
+    // ========================================
     public Shipment createShipment(Shipment shipment) {
         String trackingId;
         do {
@@ -47,8 +52,22 @@ public class ShipmentService {
             savedShipment.setQrCodePath(qrPath);
             savedShipment = shipmentRepository.save(savedShipment);
         } catch (Exception e) {
-            // Log error but don't fail shipment creation
             System.err.println("Failed to generate QR: " + e.getMessage());
+        }
+
+        // ✅ Send WebSocket notification for new shipment
+        try {
+            wsService.notifyShipmentUpdate(
+                    savedShipment.getTrackingId(),
+                    "CREATED",
+                    "Shipment created"
+            );
+            wsService.notifyAdminDashboard(
+                    "SHIPMENT_CREATED",
+                    "New shipment: " + savedShipment.getTrackingId()
+            );
+        } catch (Exception e) {
+            System.err.println("WebSocket notify failed: " + e.getMessage());
         }
 
         return savedShipment;
@@ -96,6 +115,9 @@ public class ShipmentService {
         return shipmentRepository.findByStatus(status);
     }
 
+    // ========================================
+    // Update status — WITH WebSocket notification
+    // ========================================
     public Shipment updateStatus(Long id, String newStatus) {
         Shipment shipment = getShipmentById(id);
         shipment.setStatus(newStatus);
@@ -104,7 +126,34 @@ public class ShipmentService {
             shipment.setActualDeliveryDate(LocalDateTime.now());
         }
 
-        return shipmentRepository.save(shipment);
+        Shipment updated = shipmentRepository.save(shipment);
+
+        // ✅ Send WebSocket notification
+        try {
+            wsService.notifyShipmentUpdate(
+                    updated.getTrackingId(),
+                    newStatus,
+                    "Status updated"
+            );
+
+            // Also notify the customer
+            wsService.notifyUser(
+                    updated.getCustomerId(),
+                    "Shipment Update",
+                    "Your shipment " + updated.getTrackingId() + " is now " + newStatus,
+                    "SHIPMENT_STATUS"
+            );
+
+            // Notify admin dashboard
+            wsService.notifyAdminDashboard(
+                    "SHIPMENT_STATUS_CHANGED",
+                    updated.getTrackingId() + " → " + newStatus
+            );
+        } catch (Exception e) {
+            System.err.println("WebSocket notify failed: " + e.getMessage());
+        }
+
+        return updated;
     }
 
     public void deleteShipment(Long id) {
@@ -112,6 +161,13 @@ public class ShipmentService {
             throw new CustomException("Shipment not found");
         }
         shipmentRepository.deleteById(id);
+
+        // ✅ Notify admin
+        try {
+            wsService.notifyAdminDashboard("SHIPMENT_DELETED", "Shipment ID " + id + " deleted");
+        } catch (Exception e) {
+            System.err.println("WebSocket notify failed: " + e.getMessage());
+        }
     }
 
     // Generate or regenerate QR code
