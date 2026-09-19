@@ -1,5 +1,7 @@
 package com.trackflow.controller;
 
+import com.trackflow.dto.AddressRequest;
+import com.trackflow.dto.AddressResponse;
 import com.trackflow.entity.Address;
 import com.trackflow.exception.CustomException;
 import com.trackflow.repository.AddressRepository;
@@ -11,6 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/users/{userId}/addresses")
@@ -19,17 +22,26 @@ public class AddressController {
     @Autowired
     private AddressRepository addressRepository;
 
-    // Get all addresses
+    // ========================================
+    // 1. Get all addresses
+    // ========================================
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
-    public List<Address> getUserAddresses(@PathVariable Long userId) {
-        return addressRepository.findByUserId(userId);
+    public List<AddressResponse> getUserAddresses(@PathVariable Long userId) {
+        return addressRepository.findByUserId(userId).stream()
+                .map(AddressResponse::fromEntity)
+                .collect(Collectors.toList());
     }
 
-    // Get single address
+    // ========================================
+    // 2. Get single address
+    // ========================================
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
-    public ResponseEntity<Address> getAddress(@PathVariable Long userId, @PathVariable Long id) {
+    public ResponseEntity<AddressResponse> getAddress(
+            @PathVariable Long userId,
+            @PathVariable Long id) {
+
         Address address = addressRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Address not found"));
 
@@ -37,17 +49,28 @@ public class AddressController {
             throw new CustomException("Address does not belong to this user");
         }
 
-        return ResponseEntity.ok(address);
+        return ResponseEntity.ok(AddressResponse.fromEntity(address));
     }
 
-    // Create address
+    // ========================================
+    // 3. Create address
+    // ========================================
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
-    public ResponseEntity<Address> createAddress(
+    public ResponseEntity<AddressResponse> createAddress(
             @PathVariable Long userId,
-            @Valid @RequestBody Address address) {
+            @Valid @RequestBody AddressRequest request) {
 
+        Address address = new Address();
         address.setUserId(userId);
+        address.setAddressLine1(request.getAddressLine1());
+        address.setAddressLine2(request.getAddressLine2());
+        address.setCity(request.getCity());
+        address.setState(request.getState());
+        address.setPostalCode(request.getPostalCode());
+        address.setCountry(request.getCountry());
+        address.setAddressType(request.getAddressType());
+        address.setDefault(request.isDefault());
 
         List<Address> existing = addressRepository.findByUserId(userId);
         if (existing.isEmpty()) {
@@ -62,16 +85,18 @@ public class AddressController {
         }
 
         Address saved = addressRepository.save(address);
-        return new ResponseEntity<>(saved, HttpStatus.CREATED);
+        return new ResponseEntity<>(AddressResponse.fromEntity(saved), HttpStatus.CREATED);
     }
 
-    // Update address
+    // ========================================
+    // 4. Update address
+    // ========================================
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
-    public ResponseEntity<Address> updateAddress(
+    public ResponseEntity<AddressResponse> updateAddress(
             @PathVariable Long userId,
             @PathVariable Long id,
-            @Valid @RequestBody Address addressDetails) {
+            @Valid @RequestBody AddressRequest request) {
 
         Address address = addressRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Address not found"));
@@ -80,22 +105,24 @@ public class AddressController {
             throw new CustomException("Address does not belong to this user");
         }
 
-        address.setAddressLine1(addressDetails.getAddressLine1());
-        address.setAddressLine2(addressDetails.getAddressLine2());
-        address.setCity(addressDetails.getCity());
-        address.setState(addressDetails.getState());
-        address.setPostalCode(addressDetails.getPostalCode());
-        address.setCountry(addressDetails.getCountry());
-        address.setAddressType(addressDetails.getAddressType());
+        address.setAddressLine1(request.getAddressLine1());
+        address.setAddressLine2(request.getAddressLine2());
+        address.setCity(request.getCity());
+        address.setState(request.getState());
+        address.setPostalCode(request.getPostalCode());
+        address.setCountry(request.getCountry());
+        address.setAddressType(request.getAddressType());
 
         Address updated = addressRepository.save(address);
-        return ResponseEntity.ok(updated);
+        return ResponseEntity.ok(AddressResponse.fromEntity(updated));
     }
 
-    // Set default
+    // ========================================
+    // 5. Set default
+    // ========================================
     @PutMapping("/{id}/set-default")
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
-    public ResponseEntity<Address> setDefault(
+    public ResponseEntity<AddressResponse> setDefault(
             @PathVariable Long userId,
             @PathVariable Long id) {
 
@@ -114,13 +141,18 @@ public class AddressController {
 
         address.setDefault(true);
         Address updated = addressRepository.save(address);
-        return ResponseEntity.ok(updated);
+        return ResponseEntity.ok(AddressResponse.fromEntity(updated));
     }
 
-    // Delete address
+    // ========================================
+    // 6. Delete address
+    // ========================================
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
-    public ResponseEntity<Void> deleteAddress(@PathVariable Long userId, @PathVariable Long id) {
+    public ResponseEntity<Void> deleteAddress(
+            @PathVariable Long userId,
+            @PathVariable Long id) {
+
         Address address = addressRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Address not found"));
 

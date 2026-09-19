@@ -1,5 +1,7 @@
 package com.trackflow.controller;
 
+import com.trackflow.dto.UserRequest;
+import com.trackflow.dto.UserResponse;
 import com.trackflow.entity.User;
 import com.trackflow.exception.CustomException;
 import com.trackflow.repository.UserRepository;
@@ -14,7 +16,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/users")
@@ -26,65 +28,71 @@ public class UserController {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    // 1. Create User - Only ADMIN - CLEARS CACHE
+    // 1. Create User - Returns UserResponse (no password!)
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
     @CacheEvict(value = {"users", "userById"}, allEntries = true)
-    public ResponseEntity<User> createUser(@Valid @RequestBody User user) {
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
-        if (user.getRole() == null || user.getRole().isEmpty()) {
-            user.setRole("CUSTOMER");
-        }
+    public ResponseEntity<UserResponse> createUser(@Valid @RequestBody UserRequest request) {
+        User user = new User();
+        user.setUsername(request.getUsername());
+        user.setEmail(request.getEmail());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setPhone(request.getPhone());
+        user.setFullName(request.getFullName());
+        user.setRole(request.getRole() != null ? request.getRole() : "CUSTOMER");
+
         User savedUser = userRepository.save(user);
-        return new ResponseEntity<>(savedUser, HttpStatus.CREATED);
+        return new ResponseEntity<>(UserResponse.fromEntity(savedUser), HttpStatus.CREATED);
     }
 
-    // 2. Get All Users - Only ADMIN - CACHED
+    // 2. Get All Users - Returns List<UserResponse>
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     @Cacheable(value = "users")
-    public List<User> getAllUsers() {
-        System.out.println("⚡ Fetching ALL users from DATABASE");
-        return userRepository.findAll();
+    public List<UserResponse> getAllUsers() {
+        return userRepository.findAll().stream()
+                .map(UserResponse::fromEntity)
+                .collect(Collectors.toList());
     }
 
-    // 3. Get User by ID - CACHED
+    // 3. Get User by ID - Returns UserResponse
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
     @Cacheable(value = "userById", key = "#id")
-    public ResponseEntity<User> getUserById(@PathVariable Long id) {
-        System.out.println("⚡ Fetching user " + id + " from DATABASE");
-        Optional<User> user = userRepository.findById(id);
-        return user.map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<UserResponse> getUserById(@PathVariable Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new CustomException("User not found"));
+        return ResponseEntity.ok(UserResponse.fromEntity(user));
     }
 
-    // 4. Get User by Username - Only ADMIN
+    // 4. Get User by Username
     @GetMapping("/username/{username}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<User> getUserByUsername(@PathVariable String username) {
-        Optional<User> user = userRepository.findByUsername(username);
-        return user.map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<UserResponse> getUserByUsername(@PathVariable String username) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new CustomException("User not found"));
+        return ResponseEntity.ok(UserResponse.fromEntity(user));
     }
 
-    // 5. Update User - CLEARS CACHE
+    // 5. Update User
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
     @CacheEvict(value = {"users", "userById"}, allEntries = true)
-    public ResponseEntity<User> updateUser(@PathVariable Long id, @Valid @RequestBody User userDetails) {
+    public ResponseEntity<UserResponse> updateUser(
+            @PathVariable Long id,
+            @Valid @RequestBody UserRequest request) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new CustomException("User not found"));
 
-        user.setFullName(userDetails.getFullName());
-        user.setPhone(userDetails.getPhone());
-        user.setEmail(userDetails.getEmail());
+        user.setFullName(request.getFullName());
+        user.setPhone(request.getPhone());
+        user.setEmail(request.getEmail());
 
         User updatedUser = userRepository.save(user);
-        return ResponseEntity.ok(updatedUser);
+        return ResponseEntity.ok(UserResponse.fromEntity(updatedUser));
     }
 
-    // 6. Delete User - Only ADMIN - CLEARS CACHE
+    // 6. Delete User
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     @CacheEvict(value = {"users", "userById"}, allEntries = true)
@@ -96,15 +104,15 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
 
-    // 7. Make User Admin - Only ADMIN
+    // 7. Make Admin
     @PutMapping("/{id}/make-admin")
     @PreAuthorize("hasRole('ADMIN')")
     @CacheEvict(value = {"users", "userById"}, allEntries = true)
-    public ResponseEntity<User> makeAdmin(@PathVariable Long id) {
+    public ResponseEntity<UserResponse> makeAdmin(@PathVariable Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new CustomException("User not found"));
         user.setRole("ADMIN");
         User updatedUser = userRepository.save(user);
-        return ResponseEntity.ok(updatedUser);
+        return ResponseEntity.ok(UserResponse.fromEntity(updatedUser));
     }
 }
